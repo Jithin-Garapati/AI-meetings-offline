@@ -561,15 +561,11 @@ export default function TranscriptionApp() {
                     onClick={isRecording ? stopRecording : startRecording}
                     className={`relative w-20 h-20 rounded-full border-4 transition-all duration-200 ${
                       isRecording
-                        ? "border-red-500 bg-red-50 hover:bg-red-100"
+                        ? "border-red-400 bg-red-50 hover:bg-red-100"
                         : "border-gray-300 bg-white hover:border-blue-500 hover:bg-blue-50"
                     }`}
                   >
-                    <div
-                      className={`w-full h-full rounded-full flex items-center justify-center ${
-                        isRecording ? "animate-pulse" : ""
-                      }`}
-                    >
+                    <div className="w-full h-full rounded-full flex items-center justify-center">
                       {isRecording ? (
                         <div className="w-6 h-6 bg-red-500 rounded-sm" />
                       ) : (
@@ -577,7 +573,7 @@ export default function TranscriptionApp() {
                       )}
                     </div>
                     {isRecording && (
-                      <div className="absolute -inset-2 border-2 border-red-300 rounded-full animate-ping" />
+                      <div className="absolute -inset-2 border-2 border-red-300 rounded-full" />
                     )}
                   </button>
                 </div>
@@ -775,9 +771,11 @@ export default function TranscriptionApp() {
                                           </Button>
                                         </div>
                                         <ScrollArea className="h-[300px] border rounded-md p-3 bg-gray-50">
-                                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                            {transcription.markdownSummary}
-                                          </ReactMarkdown>
+                                          <div className="markdown">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                              {transcription.markdownSummary}
+                                            </ReactMarkdown>
+                                          </div>
                                         </ScrollArea>
                                       </div>
                                     ) : (
