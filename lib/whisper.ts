@@ -13,6 +13,8 @@ export async function loadWhisperModel(size: 'base' | 'small' = 'base') {
 
 export async function transcribeBlob(blob: Blob, size: 'base' | 'small' = 'base'): Promise<string> {
   const model = await loadWhisperModel(size);
+export async function transcribeBlob(blob: Blob): Promise<string> {
+  const model = await loadWhisperModel();
   const audioCtx = new AudioContext({ sampleRate: 16000 });
   const arrayBuffer = await blob.arrayBuffer();
   const decoded = await audioCtx.decodeAudioData(arrayBuffer);

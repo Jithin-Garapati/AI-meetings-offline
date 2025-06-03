@@ -124,6 +124,8 @@ export default function TranscriptionApp() {
     setIsWhisperLoading(true)
     setWhisperReady(false)
     loadWhisperModel(modelSize)
+
+    loadWhisperModel()
       .then(() => {
         setWhisperReady(true)
       })
@@ -139,6 +141,8 @@ export default function TranscriptionApp() {
         setIsWhisperLoading(false)
       })
   }, [modelSize])
+
+  }, [])
 
   // Save transcriptions to localStorage whenever they change
   useEffect(() => {
@@ -431,6 +435,7 @@ export default function TranscriptionApp() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
         <p className="mt-4 text-gray-600">Downloading {modelSize} speech recognition model...</p>
+        <p className="mt-4 text-gray-600">Downloading speech recognition model...</p>
       </div>
     )
   }
