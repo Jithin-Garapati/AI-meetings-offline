@@ -78,7 +78,11 @@ Do NOT output JSON. Output only the Markdown summary.
     }
     cleanedMarkdown = cleanedMarkdown.trim();
 
-    return Response.json({ markdownSummary: cleanedMarkdown });
+    // Prefix with a plain "Summary" heading so copied text matches the desired
+    // format while still rendering nicely in Markdown.
+    const finalMarkdown = `Summary\n\n${cleanedMarkdown}`;
+
+    return Response.json({ markdownSummary: finalMarkdown });
 
   } catch (error) {
     console.error("Error generating summary:", error);
