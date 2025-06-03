@@ -65,6 +65,8 @@ export default function TranscriptionApp() {
   const [selectedTranscription, setSelectedTranscription] = useState<Transcription | null>(null)
   const [storageStatus, setStorageStatus] = useState<"available" | "unavailable" | "checking">("checking")
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [isWhisperLoading, setIsWhisperLoading] = useState(true)
+  const [whisperReady, setWhisperReady] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -116,6 +118,25 @@ export default function TranscriptionApp() {
     }
   }, [storageStatus])
 
+  // Load Whisper model on mount so it can be cached for offline use
+  useEffect(() => {
+    loadWhisperModel()
+      .then(() => {
+        setWhisperReady(true)
+      })
+      .catch((err) => {
+        console.error('Failed to load Whisper model', err)
+        if (!navigator.onLine) {
+          setError('Whisper model not available offline. Please connect to the internet to download it.')
+        } else {
+          setError('Failed to load speech recognition model.')
+        }
+      })
+      .finally(() => {
+        setIsWhisperLoading(false)
+      })
+  }, [])
+
   // Save transcriptions to localStorage whenever they change
   useEffect(() => {
     if (storageStatus === "available" && transcriptions.length > 0) {
@@ -130,6 +151,17 @@ export default function TranscriptionApp() {
 
   const startRecording = async () => {
     if (!isSupported) return
+
+    if (!whisperReady) {
+      if (!navigator.onLine) {
+        setError('Speech recognition model not available offline yet. Connect to the internet to download it.')
+      } else if (isWhisperLoading) {
+        setError('Speech recognition model is still loading, please wait.')
+      } else {
+        setError('Speech recognition model is not ready.')
+      }
+      return
+    }
 
     try {
       await loadWhisperModel()
@@ -391,6 +423,15 @@ export default function TranscriptionApp() {
     { code: "zh-CN", name: "Chinese (Simplified)" },
   ]
 
+  if (isWhisperLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <p className="mt-4 text-gray-600">Downloading speech recognition model...</p>
+      </div>
+    )
+  }
+
   if (!isSupported) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -516,6 +557,7 @@ export default function TranscriptionApp() {
                         ? "border-red-400 bg-red-50 hover:bg-red-100"
                         : "border-gray-300 bg-white hover:border-blue-500 hover:bg-blue-50"
                     }`}
+                    disabled={isWhisperLoading || !whisperReady}
                   >
                     <div className="w-full h-full rounded-full flex items-center justify-center">
                       {isRecording ? (
