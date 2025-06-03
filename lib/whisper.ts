@@ -1,13 +1,18 @@
 let whisperModel: any = null
+let currentModelSize: 'base' | 'small' | null = null
 
-export async function loadWhisperModel() {
-  if (!whisperModel) {
+export async function loadWhisperModel(size: 'base' | 'small' = 'base') {
+  if (!whisperModel || currentModelSize !== size) {
     const { pipeline } = await import('@xenova/transformers');
-    whisperModel = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', { quantized: true });
+    const modelId = size === 'small' ? 'Xenova/whisper-small' : 'Xenova/whisper-base';
+    whisperModel = await pipeline('automatic-speech-recognition', modelId, { quantized: true });
+    currentModelSize = size;
   }
   return whisperModel;
 }
 
+export async function transcribeBlob(blob: Blob, size: 'base' | 'small' = 'base'): Promise<string> {
+  const model = await loadWhisperModel(size);
 export async function transcribeBlob(blob: Blob): Promise<string> {
   const model = await loadWhisperModel();
   const audioCtx = new AudioContext({ sampleRate: 16000 });

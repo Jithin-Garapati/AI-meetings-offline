@@ -67,6 +67,7 @@ export default function TranscriptionApp() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [isWhisperLoading, setIsWhisperLoading] = useState(true)
   const [whisperReady, setWhisperReady] = useState(false)
+  const [modelSize, setModelSize] = useState<'base' | 'small'>('base')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -120,6 +121,10 @@ export default function TranscriptionApp() {
 
   // Load Whisper model on mount so it can be cached for offline use
   useEffect(() => {
+    setIsWhisperLoading(true)
+    setWhisperReady(false)
+    loadWhisperModel(modelSize)
+
     loadWhisperModel()
       .then(() => {
         setWhisperReady(true)
@@ -135,6 +140,8 @@ export default function TranscriptionApp() {
       .finally(() => {
         setIsWhisperLoading(false)
       })
+  }, [modelSize])
+
   }, [])
 
   // Save transcriptions to localStorage whenever they change
@@ -164,7 +171,7 @@ export default function TranscriptionApp() {
     }
 
     try {
-      await loadWhisperModel()
+      await loadWhisperModel(modelSize)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
 
@@ -176,7 +183,7 @@ export default function TranscriptionApp() {
       recorder.ondataavailable = async (e: BlobEvent) => {
         if (e.data.size > 0) {
           try {
-            const text = await transcribeBlob(e.data)
+            const text = await transcribeBlob(e.data, modelSize)
             setCurrentTranscript((prev) => prev + text + " ")
           } catch (err) {
             console.error(err)
@@ -427,6 +434,7 @@ export default function TranscriptionApp() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <p className="mt-4 text-gray-600">Downloading {modelSize} speech recognition model...</p>
         <p className="mt-4 text-gray-600">Downloading speech recognition model...</p>
       </div>
     )
@@ -513,6 +521,18 @@ export default function TranscriptionApp() {
                                   {lang.name}
                                 </SelectItem>
                               ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="model-size">Model Size</Label>
+                          <Select value={modelSize} onValueChange={(v) => setModelSize(v as 'base' | 'small')}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="base">Base</SelectItem>
+                              <SelectItem value="small">Small</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
