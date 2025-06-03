@@ -38,6 +38,7 @@ import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ParticipantTags } from "@/components/participant-tags"
+import { loadWhisperModel, transcribeBlob } from "@/lib/whisper"
 import { toast } from "@/components/ui/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -49,40 +50,10 @@ interface Transcription {
   markdownSummary?: string // Consolidated field for the AI-generated summary in Markdown format
 }
 
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList
-  resultIndex: number
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string
-  message: string
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start(): void
-  stop(): void
-  abort(): void
-  onstart: ((this: SpeechRecognition, ev: Event) => any) | null
-  onend: ((this: SpeechRecognition, ev: Event) => any) | null
-  onresult: ((this: SpeechRecognitionEvent) => any) | null
-  onerror: ((this: SpeechRecognitionErrorEvent) => any) | null
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition
-    webkitSpeechRecognition: new () => SpeechRecognition
-  }
-}
 
 export default function TranscriptionApp() {
   const [isRecording, setIsRecording] = useState(false)
   const [currentTranscript, setCurrentTranscript] = useState("")
-  const [interimTranscript, setInterimTranscript] = useState("")
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([])
   const [isSupported, setIsSupported] = useState(true)
   const [error, setError] = useState("")
@@ -96,7 +67,7 @@ export default function TranscriptionApp() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 
   // Group transcriptions by date
   const groupedTranscriptions = transcriptions.reduce((groups: Record<string, Transcription[]>, item) => {
@@ -138,10 +109,10 @@ export default function TranscriptionApp() {
       }
     }
 
-    // Check if speech recognition is supported
-    if (!("SpeechRecognition" in window) && !("webkitSpeechRecognition" in window)) {
+    // Check if MediaRecorder is supported for Whisper recording
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
       setIsSupported(false)
-      setError("Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.")
+      setError("Audio recording is not supported in this browser.")
     }
   }, [storageStatus])
 
@@ -157,66 +128,49 @@ export default function TranscriptionApp() {
     }
   }, [transcriptions, storageStatus])
 
-  const startRecording = () => {
+  const startRecording = async () => {
     if (!isSupported) return
 
     try {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      const recognition = new SpeechRecognition()
+      await loadWhisperModel()
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
 
-      recognition.continuous = true
-      recognition.interimResults = true
-      recognition.lang = language
-
-      recognition.onstart = () => {
+      recorder.onstart = () => {
         setIsRecording(true)
         setError("")
       }
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let interim = ""
-        let final = ""
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript
-          if (event.results[i].isFinal) {
-            final += transcript + " "
-          } else {
-            interim += transcript
+      recorder.ondataavailable = async (e: BlobEvent) => {
+        if (e.data.size > 0) {
+          try {
+            const text = await transcribeBlob(e.data)
+            setCurrentTranscript((prev) => prev + text + " ")
+          } catch (err) {
+            console.error(err)
+            setError("Failed to transcribe audio chunk")
           }
         }
-
-        if (final) {
-          setCurrentTranscript((prev) => prev + final)
-          setInterimTranscript("")
-        } else {
-          setInterimTranscript(interim)
-        }
       }
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        setError(`Speech recognition error: ${event.error}`)
-        setIsRecording(false)
-      }
-
-      recognition.onend = () => {
+      recorder.onstop = () => {
         setIsRecording(false)
         if (autoSave && currentTranscript.trim()) {
           saveCurrentTranscription()
         }
       }
 
-      recognitionRef.current = recognition
-      recognition.start()
+      mediaRecorderRef.current = recorder
+      recorder.start(2000)
     } catch (err) {
-      setError("Failed to start speech recognition")
+      setError("Failed to start recording")
       console.error(err)
     }
   }
 
   const stopRecording = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop()
     }
   }
 
@@ -232,7 +186,6 @@ export default function TranscriptionApp() {
 
     setTranscriptions((prev) => [newTranscription, ...prev])
     setCurrentTranscript("")
-    setInterimTranscript("")
 
     // Keep participants for next session
     toast({
@@ -444,8 +397,7 @@ export default function TranscriptionApp() {
         <div className="max-w-4xl mx-auto">
           <Alert className="mt-8">
             <AlertDescription>
-              Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari for the best
-              experience.
+              Audio recording is not supported in this browser.
             </AlertDescription>
           </Alert>
         </div>
@@ -582,17 +534,12 @@ export default function TranscriptionApp() {
                 <div className="space-y-2">
                   <Label>Live Transcript</Label>
                   <Textarea
-                    value={currentTranscript + interimTranscript}
+                    value={currentTranscript}
                     onChange={(e) => setCurrentTranscript(e.target.value)}
                     placeholder="Your transcription will appear here..."
                     className="min-h-[200px] resize-none"
                     readOnly={isRecording}
                   />
-                  {interimTranscript && (
-                    <p className="text-sm text-gray-500">
-                      Interim: <span className="italic">{interimTranscript}</span>
-                    </p>
-                  )}
                 </div>
 
                 {/* Save Button */}
